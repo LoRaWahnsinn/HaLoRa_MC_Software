@@ -4,6 +4,10 @@
 #define CARDKB_ADDR 0x5F
 
 void setup(void) {
+    // activate VEXT 3.3V output
+    pinMode(GPIO6, OUTPUT);
+    digitalWrite(GPIO6, LOW);
+    
     Serial.begin(9600);
     Wire.begin();
 }
