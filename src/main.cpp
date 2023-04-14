@@ -31,6 +31,11 @@
 #include <Arduino.h>
 
 void setup() {
+
+    // activate VEXT 3.3V output
+    pinMode(GPIO6, OUTPUT);
+    digitalWrite(GPIO6, LOW);
+
     Wire.begin();
 
     Serial.begin(9600);
