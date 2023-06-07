@@ -21,8 +21,7 @@
 
 static uint8_t devEui[] = {0x70, 0xB3, 0xD5, 0x7E, 0xD0, 0x05, 0xE0, 0xA2};
 static uint8_t appEui[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-static uint8_t appKey[] = {0x76, 0xE9, 0x0A, 0xDB, 0x62, 0x9F, 0x63, 0x05,
-                           0xCD, 0x39, 0x77, 0xF6, 0xA0, 0xB6, 0xF6, 0x48};
+static uint8_t appKey[] = {0x76, 0xE9, 0x0A, 0xDB, 0x62, 0x9F, 0x63, 0x05, 0xCD, 0x39, 0x77, 0xF6, 0xA0, 0xB6, 0xF6, 0x48};
 
 uint16_t userChannelsMask[6] = {0x00FF, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000};
 
@@ -61,8 +60,12 @@ void printInbox(Message* message1, Message* message2, bool hasPrevPage, bool has
 void printMessage(Message* message, int messageNumber);
 char getCharFromKeyboard();
 void removeLastChar(String* allChars);
+void sendUplinkForDownlink();
+void showSending();
 
 String currentText = "";
+
+bool downlinkMessagesQueued = false;
 
 // initialize array of messages with null
 Message* messages[100] = {NULL};
@@ -72,7 +75,7 @@ void setup(void) {
     pinMode(GPIO6, OUTPUT);
     digitalWrite(GPIO6, LOW);
 
-    Serial.begin(9600);
+    Serial.begin(115200);
     u8g2.begin(); // initialize the display
     u8g2.setCursor(0, 15);
     u8g2.setFont(u8g2_font_6x13_tf);
@@ -92,32 +95,36 @@ void setup(void) {
     messages[3] = message4;
     messages[4] = message5;
 
-    //     LoRaWAN.begin(LORAWAN_CLASS, ACTIVE_REGION);
+        LoRaWAN.begin(LORAWAN_CLASS, ACTIVE_REGION);
 
-    //     LoRaWAN.setAdaptiveDR(true);
+        LoRaWAN.setAdaptiveDR(false);
 
-    // //wait until joined
-    // while (1) {
-    //     Serial.print("Joining... \n");
-    //     LoRaWAN.joinOTAA(appEui, appKey, devEui);
-    //     if (!LoRaWAN.isJoined()) {
-    //         Serial.println("JOIN FAILED!\n");
-    //     } else {
-    //         Serial.println("JOINED.");
-    //         break;
-    //     }
-    // }
+    //wait until joined
+    while (1) {
+        Serial.print("Joining... \n");
+        LoRaWAN.joinOTAA(appEui, appKey, devEui);
+        if (!LoRaWAN.isJoined()) {
+            Serial.println("JOIN FAILED!\n");
+        } else {
+            Serial.println("JOINED.");
+            break;
+        }
+    }
 
-    // // We don't request confirmation packets
-    // bool requestack = false;
+    // We request confirmation packets
+    bool requestack = true;
 
-    // char msg[] = "Test message";
+    char msg[] = "Test message";
 
-    // if (LoRaWAN.send(sizeof(msg) - 1, (uint8_t*)msg, 1, requestack) == 0) {
-    //     Serial.println("SENT");
-    // } else {
-    //     Serial.println("SEND FAILED");
-    // }
+    if (LoRaWAN.send(sizeof(msg) - 1, (uint8_t*)msg, 1, requestack)) {
+        Serial.println("SENT");
+    } else {
+        Serial.println("SEND FAILED");
+    }
+
+    while(downlinkMessagesQueued){
+        sendUplinkForDownlink();
+    }
 
 }
 
@@ -137,7 +144,7 @@ char getCharFromKeyboard(){
             char c = Wire.read();  // receive a byte as character
 
             if (c != 0) {
-                Serial.println(c, HEX);
+                //Serial.println(c, HEX);
                 return c;
             }
         }
@@ -161,8 +168,14 @@ void mainMenuPage1(){
             enterRecipient("");
             break;
         case '2':
-            Serial.println("show received messages");
-            displayInbox();
+            // Serial.println("show received messages");
+            // displayInbox();
+
+            sendUplinkForDownlink();
+            while (downlinkMessagesQueued) {
+                sendUplinkForDownlink();
+            }
+
             break;
         case '3':
             // TODO: clear inbox
@@ -287,8 +300,21 @@ void enterMessage(String recipient) {
                 return;
             case 0xB7:  // forward key
                 //TODO: send message
-                showSendSuccess();
-                //showSendFail();
+
+                showSending();
+
+                if (LoRaWAN.send(sizeof(message.c_str()) - 1, (uint8_t*)message.c_str(), 1, true)) {
+                    Serial.println("Send OK");
+                    showSendSuccess();
+                } else {
+                    Serial.println("Send FAILED");
+                    showSendFail();
+                }
+
+                while (downlinkMessagesQueued) {
+                    sendUplinkForDownlink();
+                }
+
                 return;
             case 0x8:  // delete key
                 removeLastChar(&message);
@@ -303,6 +329,21 @@ void enterMessage(String recipient) {
                 u8g2.sendBuffer();
         }
     }
+}
+
+void showSending() {
+    
+    u8g2.setDrawColor(0);
+    u8g2.clearBuffer();
+    
+    printBatteryBar();
+
+    u8g2.setDrawColor(1);
+
+    // show sending
+    u8g2.drawStr(27, 40, "sending...");
+
+    u8g2.sendBuffer();
 }
 
 void showSendSuccess() {
@@ -590,5 +631,51 @@ void printMessage(Message* message, int messageNumber) {
              default:
                 break;
         }
+    }
+}
+
+void sendUplinkForDownlink(){
+    Serial.println("Sending uplink for downlink");
+
+    //sleep for 1 second
+    delay(3000);
+
+    String message = "HelloWorld";
+
+    if (LoRaWAN.send(sizeof(message.c_str()) - 1, (uint8_t*)message.c_str(), 1, true)) {
+        Serial.println("Send OK");
+    } else {
+        Serial.println("Send FAILED");
+    }
+}
+
+void downLinkDataHandle(McpsIndication_t* mcpsIndication) {
+    Serial.printf("Received downlink: %s, RXSIZE %d, PORT %d, DATA: ",
+                  mcpsIndication->RxSlot ? "RXWIN2" : "RXWIN1",
+                  mcpsIndication->BufferSize, mcpsIndication->Port);
+
+    Serial.printf("RxData: %d", mcpsIndication->RxData);
+    Serial.printf("FramePending: %d", mcpsIndication->FramePending);
+
+    char receivedString[mcpsIndication->BufferSize +
+                        1];  // +1 for null terminator
+    int stringLength = 0;
+
+    for (uint8_t i = 0; i < mcpsIndication->BufferSize; i++) {
+        receivedString[i] = (char)mcpsIndication->Buffer[i];
+        stringLength++;
+    }
+    receivedString[stringLength] =
+        '\0';  // Add null terminator to mark the end of the string
+
+    Serial.println(receivedString);
+
+    //if there are more downlink messages to be received, send another uplink
+    if (mcpsIndication->FramePending) {
+        Serial.println("Frame pending, sending uplink");
+        downlinkMessagesQueued = true;
+    } else {
+        Serial.println("No more downlink messages");
+        downlinkMessagesQueued = false;
     }
 }
