@@ -14,6 +14,14 @@ class Message {
         read = false;
     }
 
+    // Constructor with Message string in format "sender;message"
+    Message(String message) {
+        int index = message.indexOf(';');
+        this->sender = message.substring(0, index);
+        this->message = message.substring(index + 1);
+        read = false;
+    }
+
     // Parameterized constructor
     Message(const String& sender, const String& message) {
         this->sender = sender;

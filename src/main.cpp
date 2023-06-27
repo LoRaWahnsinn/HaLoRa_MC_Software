@@ -41,6 +41,7 @@ uint16_t userChannelsMask[6] = {0x00FF, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000};
 //  29 is the SCL pin
 U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE, 28, 29);
 
+void printLoadingScreen();
 void printThis(String text);
 void printChar(char c);
 void unprintChar();
@@ -55,13 +56,18 @@ void enterMessage(String recipient);
 void showSendSuccess();
 void showSendFail();
 void printInboxEmpty();
+void printInboxDeleted();
 void displayInbox();
+void printReceivingMessages();
+void printSendingMessage();
 void printInbox(Message* message1, Message* message2, bool hasPrevPage, bool hasNextPage);
 void printMessage(Message* message, int messageNumber);
 char getCharFromKeyboard();
 void removeLastChar(String* allChars);
+void deleteMessageFromMessageArray(int messageNumber);
+void deleteAllMessageFromMessageArray();
+void addMessageToMessageArray(String messageString);
 void sendUplinkForDownlink();
-void showSending();
 
 String currentText = "";
 
@@ -86,18 +92,16 @@ void setup(void) {
     Message* message1 = new Message("testSender1", "Message1");
     Message* message2 = new Message("testSender2", "Message2");
     Message* message3 = new Message("testSender3", "Message3");
-    Message* message4 = new Message("testSender4", "Message4");
-    Message* message5 = new Message("testSender5", "Message5");
 
     messages[0] = message1;
     messages[1] = message2;
     messages[2] = message3;
-    messages[3] = message4;
-    messages[4] = message5;
 
-        LoRaWAN.begin(LORAWAN_CLASS, ACTIVE_REGION);
+    LoRaWAN.begin(LORAWAN_CLASS, ACTIVE_REGION);
 
-        LoRaWAN.setAdaptiveDR(false);
+    LoRaWAN.setAdaptiveDR(false);
+
+    printLoadingScreen();
 
     //wait until joined
     while (1) {
@@ -111,29 +115,12 @@ void setup(void) {
         }
     }
 
-    // We request confirmation packets
-    bool requestack = true;
-
-    char msg[] = "Test message";
-
-    if (LoRaWAN.send(sizeof(msg) - 1, (uint8_t*)msg, 1, requestack)) {
-        Serial.println("SENT");
-    } else {
-        Serial.println("SEND FAILED");
-    }
-
-    while(downlinkMessagesQueued){
-        sendUplinkForDownlink();
-    }
-
 }
 
 //main menu
 void loop() {
 
     mainMenuPage1();
-    // B6: down key
-    // B5: up key
 }
 
 
@@ -153,6 +140,22 @@ char getCharFromKeyboard(){
 
 // ------- LOGIC FOR DIFFERENT SCREENS -------
 
+void printLoadingScreen()
+{
+    u8g2.clearBuffer();
+
+    u8g2.setFont(u8g2_font_fub20_tf);
+    
+    u8g2.drawStr(15, 30, "HaLoRa");
+    
+    u8g2.setFont(u8g2_font_6x13_tf);
+
+    u8g2.drawStr(25, 45, "connecting to");
+    u8g2.drawStr(35, 55, "network...");
+
+    u8g2.sendBuffer();
+}
+
 void mainMenuPage1(){
     // draw main menu
     u8g2.clearBuffer();
@@ -168,18 +171,17 @@ void mainMenuPage1(){
             enterRecipient("");
             break;
         case '2':
-            // Serial.println("show received messages");
-            // displayInbox();
-
+            printReceivingMessages();
             sendUplinkForDownlink();
             while (downlinkMessagesQueued) {
                 sendUplinkForDownlink();
             }
 
+            displayInbox();
             break;
         case '3':
-            // TODO: clear inbox
-            Serial.println("clear inbox");
+            deleteAllMessageFromMessageArray();
+            printInboxDeleted();
             break;
         case 0xB6:  // down key
             mainMenuPage2();
@@ -205,12 +207,17 @@ void mainMenuPage2() {
             enterRecipient("");
             break;
         case '2':
-            // TODO: show received messages
-            Serial.println("show received messages");
+            printReceivingMessages();
+            sendUplinkForDownlink();
+            while (downlinkMessagesQueued) {
+                sendUplinkForDownlink();
+            }
+
+            displayInbox();
             break;
         case '3':
-            // TODO: clear inbox
-            Serial.println("clear inbox");
+            deleteAllMessageFromMessageArray();
+            printInboxDeleted();
             break;
         case 0xB5:  // up key
             mainMenuPage1();
@@ -287,6 +294,7 @@ void enterMessage(String recipient) {
 
 
     String message = "";
+    String messageAndRecipient;
     u8g2.setCursor(5, 22);
 
     //TODO: Line breaks in message
@@ -299,20 +307,17 @@ void enterMessage(String recipient) {
                 enterRecipient(recipient);
                 return;
             case 0xB7:  // forward key
-                //TODO: send message
+                
+                printSendingMessage();
 
-                showSending();
+                messageAndRecipient = recipient + ";" + message;
 
-                if (LoRaWAN.send(sizeof(message.c_str()) - 1, (uint8_t*)message.c_str(), 1, true)) {
+                if (LoRaWAN.send(messageAndRecipient.length(), (uint8_t*)messageAndRecipient.c_str(), 1, true)) {
                     Serial.println("Send OK");
                     showSendSuccess();
                 } else {
                     Serial.println("Send FAILED");
                     showSendFail();
-                }
-
-                while (downlinkMessagesQueued) {
-                    sendUplinkForDownlink();
                 }
 
                 return;
@@ -331,17 +336,32 @@ void enterMessage(String recipient) {
     }
 }
 
-void showSending() {
-    
+void printReceivingMessages() {
     u8g2.setDrawColor(0);
     u8g2.clearBuffer();
-    
+
     printBatteryBar();
 
     u8g2.setDrawColor(1);
 
     // show sending
-    u8g2.drawStr(27, 40, "sending...");
+    u8g2.drawStr(40, 35, "receiving");
+    u8g2.drawStr(35, 47, "messages...");
+
+    u8g2.sendBuffer();
+}
+
+void printSendingMessage() {
+    u8g2.setDrawColor(0);
+    u8g2.clearBuffer();
+
+    printBatteryBar();
+
+    u8g2.setDrawColor(1);
+
+    // show sending
+    u8g2.drawStr(42, 35, "sending");
+    u8g2.drawStr(37, 47, "message...");
 
     u8g2.sendBuffer();
 }
@@ -384,6 +404,32 @@ void printInboxEmpty() {
 
     // show sucess message
     u8g2.drawStr(30, 40, "inbox empty");
+
+    u8g2.sendBuffer();
+
+    while (true) {
+        char c = getCharFromKeyboard();
+
+        switch (c) {
+            case 0xB4:   // back key
+                return;  // back to main
+            default:
+                break;
+        }
+    }
+}
+
+void printInboxDeleted() {
+    u8g2.setDrawColor(0);
+    u8g2.clearBuffer();
+
+    printBatteryBar();
+    printBackArrow();
+
+    u8g2.setDrawColor(1);
+
+    // show sucess message
+    u8g2.drawStr(25, 40, "inbox deleted!");
 
     u8g2.sendBuffer();
 
@@ -587,7 +633,7 @@ void printInbox(Message* message1, Message* message2, bool hasPrevPage, bool has
     
 }
 
-void printMessage(Message* message, int messageNumber) {
+void printMessage(Message* message, int messageNumber){
 
     u8g2.setDrawColor(0);
     u8g2.clearBuffer();
@@ -618,14 +664,7 @@ void printMessage(Message* message, int messageNumber) {
                 displayInbox();
                 return;  // back to message list
             case 0xB7: // forward key - delete message
-
-                while (true) {
-                    messages[i] = messages[i + 1];
-                    if(messages[i] == NULL){
-                        break;
-                    }
-                    i++;
-                }
+                deleteMessageFromMessageArray(i);
                 displayInbox();
                 return;
              default:
@@ -634,15 +673,44 @@ void printMessage(Message* message, int messageNumber) {
     }
 }
 
+void deleteMessageFromMessageArray(int messageNumber){
+    while (true) {
+        messages[messageNumber] = messages[messageNumber + 1];
+        if (messages[messageNumber] == NULL) {
+             break;
+        }
+        messageNumber++;
+    }
+}
+
+void deleteAllMessageFromMessageArray() {
+    int i = 0;
+    while (i < 100) {
+        if (messages[i] == NULL) {
+            break;
+        }
+        messages[i] = NULL;
+        i++;
+    }
+}
+
+void addMessageToMessageArray(String messageString){
+    int i = 0;
+    while (true) {
+        if (messages[i] == NULL) {
+            messages[i] = new Message(messageString);
+            break;
+        }
+        i++;
+    }
+}
+
 void sendUplinkForDownlink(){
     Serial.println("Sending uplink for downlink");
 
-    //sleep for 1 second
-    delay(3000);
+    String message = "uplink";
 
-    String message = "HelloWorld";
-
-    if (LoRaWAN.send(sizeof(message.c_str()) - 1, (uint8_t*)message.c_str(), 1, true)) {
+    if (LoRaWAN.send(message.length(), (uint8_t*)message.c_str(), 1, true)) {
         Serial.println("Send OK");
     } else {
         Serial.println("Send FAILED");
@@ -668,7 +736,11 @@ void downLinkDataHandle(McpsIndication_t* mcpsIndication) {
     receivedString[stringLength] =
         '\0';  // Add null terminator to mark the end of the string
 
+    Serial.println("Received Message:");
     Serial.println(receivedString);
+
+    //add received message to message array
+    addMessageToMessageArray(receivedString);
 
     //if there are more downlink messages to be received, send another uplink
     if (mcpsIndication->FramePending) {
