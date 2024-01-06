@@ -62,6 +62,9 @@ void printReceivingMessages();
 void printSendingMessage();
 void printInbox(Message* message1, Message* message2, bool hasPrevPage, bool hasNextPage);
 void printMessage(Message* message, int messageNumber);
+void sosOption();
+void sosMessage();
+void sendSOSMessageandLocation(String message);
 char getCharFromKeyboard();
 void removeLastChar(String* allChars);
 void deleteMessageFromMessageArray(int messageNumber);
@@ -97,6 +100,7 @@ void setup(void) {
     messages[1] = message2;
     messages[2] = message3;
 
+/*
     LoRaWAN.begin(LORAWAN_CLASS, ACTIVE_REGION);
 
     LoRaWAN.setAdaptiveDR(false);
@@ -114,6 +118,7 @@ void setup(void) {
             break;
         }
     }
+*/
 
 }
 
@@ -212,12 +217,16 @@ void mainMenuPage2() {
             while (downlinkMessagesQueued) {
                 sendUplinkForDownlink();
             }
-
+            //TODO: sleep
             displayInbox();
             break;
         case '3':
             deleteAllMessageFromMessageArray();
             printInboxDeleted();
+            break;
+        case '4':
+            sosOption();
+           
             break;
         case 0xB5:  // up key
             mainMenuPage1();
@@ -286,7 +295,7 @@ void enterMessage(String recipient) {
     u8g2.setDrawColor(0); //because we want to write the text in black
 
     //show recipient at top of screen
-    u8g2.drawStr(5, 10, String("To " + recipient).c_str());
+    u8g2.drawStr(5, 10, String("To: " + recipient).c_str());
     
     u8g2.sendBuffer();
 
@@ -469,6 +478,109 @@ void showSendFail() {
         }
     }
 }
+
+void sosOption(){
+    u8g2.clearBuffer();
+    u8g2.setDrawColor(1);
+    
+    printBatteryBar();
+    printBackArrow();
+    printForwardArrow();
+    //write SOS in Battery Bar
+    u8g2.setDrawColor(0); //because we want to write the text in black
+    u8g2.drawStr(5, 10, "SOS");
+    //write 
+    u8g2.setDrawColor(1);
+    u8g2.drawStr(5, 27, "SOS message contains");
+    u8g2.drawStr(5, 38, "- location");
+    u8g2.drawStr(5, 49, "- message (optional)");
+
+    u8g2.sendBuffer();
+    u8g2.setDrawColor(0);
+    while(true){
+        char c = getCharFromKeyboard();
+
+        switch (c) {
+            case 0xB4:  // back key
+                return;
+            case 0xB7:  // forward key
+                sosMessage();
+                return;
+            default:
+                break;
+        }
+    }
+
+}
+void sendSOSMessageAndLocation(String message){
+    //todo send sos message
+    //todo send location
+    if(message=="1"){
+        printSendingMessage();
+        delay(3000);
+        showSendSuccess();
+        
+        
+    }
+    else{
+        showSendFail();
+        delay(3000);
+        //print try again
+
+    }
+
+    
+    return;
+}
+
+
+void sosMessage(){
+    u8g2.clearBuffer();
+    u8g2.setDrawColor(1);
+    
+    printBatteryBar();
+    printBackArrow();
+    printForwardArrow();
+    //write SOS in Battery Bar
+    u8g2.setDrawColor(0); //because we want to write the text in black
+    u8g2.drawStr(5, 10, "SOS message:");
+    
+    //write message
+    u8g2.setDrawColor(1);
+    String message = "";
+
+        u8g2.setCursor(5, 22);
+
+    //TODO: Line breaks in message
+
+    while (true) {
+        char c = getCharFromKeyboard();
+
+        switch (c) {
+            case 0xB4:  // back key
+                sosOption();
+                return;
+            case 0xB7:  // forward key
+                
+                sendSOSMessageAndLocation(message);
+
+                return;
+            case 0x8:  // delete key
+                removeLastChar(&message);
+                break;
+            default:
+
+                if (message.length() > 1000) break; //TODO: change to LoRa max message length
+
+                message += c;
+
+                u8g2.print(c);
+                u8g2.sendBuffer();
+        }
+    }
+
+}
+
 
 void removeLastChar(String* allChars){
     if (allChars->length() == 0) {
