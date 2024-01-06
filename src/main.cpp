@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <U8g2lib.h>
 #include <Wire.h>
+#include "HT_SH1107Wire.h"
 
 #include <./message.cpp>
 #include <./screens/back_arrow.cpp>
@@ -37,9 +38,23 @@ uint16_t userChannelsMask[6] = {0x00FF, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000};
 //  HW enables hardware I2C
 //  U8G2_R0 is the rotation of the display
 //  U8X8_PIN_NONE is the reset pin
-//  28 is the SDA pin
-//  29 is the SCL pin
-U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE, 28, 29);
+//  28 is the SCL pin OLD
+//  29 is the SDA pin OLD
+//  39 is the SCL pin NEW
+//  40 is the SDA pin NEW
+
+//original
+//U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE, 28, 29);
+
+//U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE, 39, 40);
+
+// works but is very slow
+//U8G2_SH1106_128X64_NONAME_F_SW_I2C u8g2(U8G2_R0, SCL1, SDA1, U8X8_PIN_NONE);
+
+U8G2_SH1106_128X64_NONAME_F_2ND_HW_I2C u8g2(U8G2_R0);
+
+SH1107Wire  display(0x3c, 500000, SDA, SCL ,GEOMETRY_128_64,GPIO10);
+//SH1107Wire  display(0x3c, 500000, SDA, SCL ,GEOMETRY_128_64,38);
 
 void printLoadingScreen();
 void printThis(String text);
@@ -80,17 +95,23 @@ bool downlinkMessagesQueued = false;
 Message* messages[100] = {NULL};
 
 void setup(void) {
+
     //activate VEXT 3.3V output
-    pinMode(GPIO6, OUTPUT);
-    digitalWrite(GPIO6, LOW);
+    pinMode(Vext, OUTPUT);
+    digitalWrite(Vext, LOW);
+    
+    // we have to wait for the display to power up before initializing it
+    delay(1000);
 
     Serial.begin(115200);
+    //Wire1.begin(SDA1, SCL1, 400000);
+    //u8g2.setBusClock(400000);
+    //u8g2.setI2CAddress(0x3C * 2);
     u8g2.begin(); // initialize the display
     u8g2.setCursor(0, 15);
     u8g2.setFont(u8g2_font_6x13_tf);
 
-
-    Wire.begin();
+    //Wire.begin();
 
     Message* message1 = new Message("testSender1", "Message1");
     Message* message2 = new Message("testSender2", "Message2");
@@ -99,6 +120,21 @@ void setup(void) {
     messages[0] = message1;
     messages[1] = message2;
     messages[2] = message3;
+
+    display.init();
+    //display.setFont(ArialMT_Plain_10);
+    display.setFont(ArialMT_Plain_16); //bigger font
+
+    display.clear();
+
+    display.screenRotate(ANGLE_270_DEGREE);
+
+    display.drawString(3, 3, "HaLoRa");
+    display.drawString(3, 23, "Test");
+    display.drawString(3, 43, "Hello");
+    display.drawString(3, 63, "World");
+    // write the buffer to the display
+    display.display();
 
 /*
     LoRaWAN.begin(LORAWAN_CLASS, ACTIVE_REGION);
@@ -124,10 +160,8 @@ void setup(void) {
 
 //main menu
 void loop() {
-
     mainMenuPage1();
 }
-
 
 char getCharFromKeyboard(){
     while(true){
@@ -136,7 +170,7 @@ char getCharFromKeyboard(){
             char c = Wire.read();  // receive a byte as character
 
             if (c != 0) {
-                //Serial.println(c, HEX);
+                Serial.println(c, HEX);
                 return c;
             }
         }
