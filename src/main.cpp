@@ -4,6 +4,8 @@
 #include "HT_SH1107Wire.h"
 
 #include <./message.cpp>
+#include <./screens/menu_empty.cpp>
+#include <./screens/menu_empty_bigger.cpp>
 #include <./screens/back_arrow.cpp>
 #include <./screens/battery_bar.cpp>
 #include <./screens/down_arrow.cpp>
@@ -29,6 +31,7 @@ uint16_t userChannelsMask[6] = {0x00FF, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000};
 #define CARDKB_ADDR 0x5F
 #define heigth 64
 #define width 128
+#define numberOfMenuePages 3
 
 // constructor for Display
 // SH1106 is the display controller
@@ -60,12 +63,16 @@ void printLoadingScreen();
 void printThis(String text);
 void printChar(char c);
 void unprintChar();
-void printBatteryBar();
+void printUpperBar();
+void printUpperInfoBar(String output);
 void printBackArrow();
 void printForwardArrow();
 void printDeleteButton();
+void optionsSwitch(char c);
 void mainMenuPage1();
 void mainMenuPage2();
+void mainMenuPage3();
+void printMenuPage(String firstInt, String secondInt , String fistText , String secondText, String menuTitle, int page);
 void enterRecipient(String recipient);
 void enterMessage(String recipient);
 void showSendSuccess();
@@ -76,6 +83,8 @@ void displayInbox();
 void printReceivingMessages();
 void printSendingMessage();
 void printInbox(Message* message1, Message* message2, bool hasPrevPage, bool hasNextPage);
+void printContactsFriends();
+void printContactsGroups();
 void printMessage(Message* message, int messageNumber);
 void sosOption();
 void sosMessage();
@@ -86,7 +95,7 @@ void deleteMessageFromMessageArray(int messageNumber);
 void deleteAllMessageFromMessageArray();
 void addMessageToMessageArray(String messageString);
 void sendUplinkForDownlink();
-
+void contactsMenu();
 String currentText = "";
 
 bool downlinkMessagesQueued = false;
@@ -195,17 +204,8 @@ void printLoadingScreen()
     u8g2.sendBuffer();
 }
 
-void mainMenuPage1(){
-    // draw main menu
-    u8g2.clearBuffer();
-    u8g2.setDrawColor(0);  // otherwise XBM is inverted
-    u8g2.drawXBM(0, 0, home_screen_width, home_screen_height, home_screen_bits);
-    u8g2.drawStr(87, 10, "25%");  // TODO: Actual battery percentage
-    u8g2.sendBuffer();
-
-    char c = getCharFromKeyboard();
-
-    switch (c) {
+void optionsSwitch(char c){
+        switch (c) {
         case '1':  // 1
             enterRecipient("");
             break;
@@ -215,60 +215,143 @@ void mainMenuPage1(){
             while (downlinkMessagesQueued) {
                 sendUplinkForDownlink();
             }
-
             displayInbox();
             break;
         case '3':
+            //contactsMenu();
+            break;
+        case '4':
             deleteAllMessageFromMessageArray();
             printInboxDeleted();
             break;
-        case 0xB6:  // down key
-            mainMenuPage2();
+        case '5':
+            sosOption();
+           
             break;
-        default:
-            //mainMenuPage1();
-            break;
-    }
+        case '6':
+            //stopwatch();
+            break;  
+        }
+
+}
+
+void mainMenuPage1(){
+    // draw main menu
+    printMenuPage("1","2","Send Message","Recv. Message ", "Menu", 1);
+
+    char c = getCharFromKeyboard();
+
+
+        if(c == 0xB6)  // down key
+          mainMenuPage2();
+        if(c > 0x30 && c < 0x37) 
+          optionsSwitch(c);
 }
 
 void mainMenuPage2() {
     // draw main menu
-    u8g2.clearBuffer();
-    u8g2.setDrawColor(0);  // otherwise XBM is inverted
-    u8g2.drawXBM(0, 0, home_screen_2_width, home_screen_2_height, home_screen_2_bits);
-    u8g2.drawStr(87, 10, "25%");  // TODO: Actual battery percentage
-    u8g2.sendBuffer();
+    
+    printMenuPage("3","4","contacts","delete inbox", "Menu", 2);
 
     char c = getCharFromKeyboard();
+    if(c == 0xB6)  // down key
+          mainMenuPage3();
+    if(c == 0xB5)  // up key
+          mainMenuPage1();
 
-    switch (c) {
-        case '1':  // 1
-            enterRecipient("");
+    if(c > 0x30 && c < 0x37) 
+          optionsSwitch(c);
+    
+
+
+}
+
+void mainMenuPage3(){
+    //draw main menu
+    printMenuPage("5","6","SOS","Stopwatch", "Menu", 3);
+     char c = getCharFromKeyboard();
+     if(c == 0xB5)  // up key
+          mainMenuPage2();
+
+    if(c > 0x30 && c < 0x37) 
+          optionsSwitch(c);
+     
+}
+
+void printMenuPage(String firstInt ,String secondInt, String firstText, String secondText, String menuTitle, int page){
+    u8g2.clearBuffer();
+    u8g2.setDrawColor(0);  // otherwise XBM is inverted
+    u8g2.drawXBM(0, 12, menu_empty_bigger_width, menu_empty_bigger_height, menu_empty_bigger_bits);
+    printUpperInfoBar(menuTitle);
+   
+    u8g2.setDrawColor(1);
+    //print menu options
+    //int
+    u8g2.drawStr(11, 31, String(firstInt).c_str());
+    u8g2.drawStr(11, 52, String(secondInt).c_str());
+    //text
+    u8g2.drawStr(28, 31, String(firstText).c_str());
+    u8g2.drawStr(28, 53, String(secondText).c_str());	
+
+    //print arrows
+    u8g2.setDrawColor(0);
+
+    //down arrow
+    if(page < numberOfMenuePages  ){
+        u8g2.drawXBM(118, 50, down_arrow_width, down_arrow_height, down_arrow_bits);
+    }
+
+    //up arrow
+    if (page > 1 && page <= numberOfMenuePages){
+        
+        u8g2.drawXBM(118, 15, up_arrow_width, up_arrow_height, up_arrow_bits);
+       
+
+    }
+    
+    u8g2.sendBuffer();
+    
+}
+
+void contactsMenu(){
+    //print menu
+    printMenuPage("1","2","","friends ", "groups", numberOfMenuePages+1);
+    
+    char c = getCharFromKeyboard();
+    switch (c){
+        case '1':
+            //go to freinds menu
             break;
         case '2':
-            printReceivingMessages();
-            sendUplinkForDownlink();
-            while (downlinkMessagesQueued) {
-                sendUplinkForDownlink();
-            }
-            //TODO: sleep
-            displayInbox();
+            //go to groups menu
             break;
-        case '3':
-            deleteAllMessageFromMessageArray();
-            printInboxDeleted();
-            break;
-        case '4':
-            sosOption();
-           
-            break;
-        case 0xB5:  // up key
-            mainMenuPage1();
-            break;
-        default:
-            mainMenuPage2();
+        case 0xB4:  // back key
+            //go back to main menu
             break;
     }
+
+}
+
+void freindsMenu(){
+    //freinds list 
+    printMenuPage("1","2", "reload freinds", "friend1","freinds", numberOfMenuePages+1);
+    char c = getCharFromKeyboard();
+    switch (c){
+        case '1':
+            //reload freinds
+            break;
+        case '2':
+            //reload groups
+            break;
+        case 0xB4:  // back key
+            //go back to contacts menu
+            break;
+    }
+
+}
+void groupsqMenu(){
+    printMenuPage("1","2", "reload groups", "group1","groups", numberOfMenuePages+1);
+
 }
 
 void enterRecipient(String oldRecipient){
@@ -276,7 +359,7 @@ void enterRecipient(String oldRecipient){
 
     //print bitmap of enter_recipient screen
     u8g2.clearBuffer();
-    printBatteryBar();
+    printUpperBar();
     u8g2.setDrawColor(0);  // otherwise XBM is inverted
     u8g2.drawXBM(20, 17, enter_recipient_width, enter_recipient_height, enter_recipient_bits);
     printForwardArrow();
@@ -321,7 +404,7 @@ void enterMessage(String recipient) {
     u8g2.setDrawColor(0);
     u8g2.clearBuffer();
 
-    printBatteryBar();
+    printUpperBar();   
     printBackArrow();
     printForwardArrow();
 
@@ -383,7 +466,7 @@ void printReceivingMessages() {
     u8g2.setDrawColor(0);
     u8g2.clearBuffer();
 
-    printBatteryBar();
+    printUpperBar();
 
     u8g2.setDrawColor(1);
 
@@ -398,7 +481,7 @@ void printSendingMessage() {
     u8g2.setDrawColor(0);
     u8g2.clearBuffer();
 
-    printBatteryBar();
+    printUpperBar();
 
     u8g2.setDrawColor(1);
 
@@ -414,7 +497,7 @@ void showSendSuccess() {
     u8g2.setDrawColor(0);
     u8g2.clearBuffer();
     
-    printBatteryBar();
+    printUpperBar();
     printBackArrow();
 
     u8g2.setDrawColor(1);
@@ -440,7 +523,7 @@ void printInboxEmpty() {
     u8g2.setDrawColor(0);
     u8g2.clearBuffer();
 
-    printBatteryBar();
+    printUpperBar();
     printBackArrow();
 
     u8g2.setDrawColor(1);
@@ -466,7 +549,7 @@ void printInboxDeleted() {
     u8g2.setDrawColor(0);
     u8g2.clearBuffer();
 
-    printBatteryBar();
+    printUpperBar();
     printBackArrow();
 
     u8g2.setDrawColor(1);
@@ -492,7 +575,7 @@ void showSendFail() {
     u8g2.setDrawColor(0);
     u8g2.clearBuffer();
 
-    printBatteryBar();
+    printUpperBar();
     printBackArrow();
 
     // show sucess message
@@ -517,7 +600,7 @@ void sosOption(){
     u8g2.clearBuffer();
     u8g2.setDrawColor(1);
     
-    printBatteryBar();
+    printUpperBar();
     printBackArrow();
     printForwardArrow();
     //write SOS in Battery Bar
@@ -572,7 +655,7 @@ void sosMessage(){
     u8g2.clearBuffer();
     u8g2.setDrawColor(1);
     
-    printBatteryBar();
+    printUpperBar();
     printBackArrow();
     printForwardArrow();
     //write SOS in Battery Bar
@@ -697,10 +780,16 @@ void displayInbox(){
     }
 }
 
-void printBatteryBar(){
+void printUpperBar(){
+    u8g2.setDrawColor(1);
+    u8g2.drawBox(0, 0, 128, 11);
+}
+
+void printUpperInfoBar(String output){
+    u8g2.setDrawColor(1);
+    u8g2.drawBox(0, 0, 128, 11);
     u8g2.setDrawColor(0);
-    u8g2.drawXBM(0, 0, battery_bar_width, battery_bar_height, battery_bar_bits);
-    u8g2.drawStr(87, 10, "25%");  // TODO: Actual battery percentage
+    u8g2.drawStr(4, 10, output.c_str());
 }
 
 void printBackArrow(){
@@ -730,7 +819,7 @@ void printDeleteButton() {
 
 void printInbox(Message* message1, Message* message2, bool hasPrevPage, bool hasNextPage){
     u8g2.clearBuffer();
-    printBatteryBar();
+    printUpperBar();
     printBackArrow();
 
     u8g2.setDrawColor(0);
@@ -784,7 +873,7 @@ void printMessage(Message* message, int messageNumber){
     u8g2.setDrawColor(0);
     u8g2.clearBuffer();
 
-    printBatteryBar();
+    printUpperBar();
     printBackArrow();
     printDeleteButton();
 
