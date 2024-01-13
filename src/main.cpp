@@ -2,9 +2,7 @@
 #include <U8g2lib.h>
 #include <Wire.h>
 #include "HT_SH1107Wire.h"
-
 #include <./message.cpp>
-#include <./screens/menu_empty.cpp>
 #include <./screens/menu_empty_bigger.cpp>
 #include <./screens/back_arrow.cpp>
 #include <./screens/battery_bar.cpp>
@@ -234,6 +232,9 @@ void optionsSwitch(char c){
         }
 
 }
+//contacts and groups are sent from backend in the form: "usercontacts:contact1;contact2;contact3 groupcontacts:group1;group2;group3"
+//for receiving contacts and groups send uplinkforgroups in der funktion dann String message = "groupcontacts" zB
+//1 string kommt zurück -> prüfen ob message oder contacts, parsen -> in array, display
 
 void mainMenuPage1(){
     // draw main menu
@@ -986,3 +987,5 @@ void downLinkDataHandle(McpsIndication_t* mcpsIndication) {
         downlinkMessagesQueued = false;
     }
 }
+
+
