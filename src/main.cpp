@@ -1095,3 +1095,8 @@ void downLinkDataHandle(McpsIndication_t* mcpsIndication) {
     // write the buffer to the display
     display.display();
 }
+
+void setCurrentInfoText(String text){
+    currentInfoText = text;
+    drawInfoScreen();
+}
