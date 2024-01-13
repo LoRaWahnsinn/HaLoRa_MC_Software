@@ -16,6 +16,17 @@
 #include <./screens/message_box/message_box_1_unread.cpp>
 #include <./screens/message_box/message_box_2_read.cpp>
 #include <./screens/message_box/message_box_2_unread.cpp>
+#include <./icons/battery_icon_0.cpp>
+#include <./icons/battery_icon_25.cpp>
+#include <./icons/battery_icon_50.cpp>
+#include <./icons/battery_icon_75.cpp>
+#include <./icons/battery_icon_100.cpp>
+#include <./icons/signal_bars_1.cpp>
+#include <./icons/signal_bars_2.cpp>
+#include <./icons/signal_bars_3.cpp>
+#include <./icons/signal_bars_4.cpp>
+#include <./icons/clock_icon.cpp>
+#include <./icons/calendar_icon.cpp>
 
 #include "Arduino.h"
 #include "LoRaWanMinimal_APP.h"
@@ -93,8 +104,11 @@ void deleteMessageFromMessageArray(int messageNumber);
 void deleteAllMessageFromMessageArray();
 void addMessageToMessageArray(String messageString);
 void sendUplinkForDownlink();
+void drawInfoScreen();
 void contactsMenu();
 String currentText = "";
+
+String currentInfoText = "";
 
 bool downlinkMessagesQueued = false;
 
@@ -172,6 +186,7 @@ void loop() {
 
 char getCharFromKeyboard(){
     while(true){
+        drawInfoScreen();
         Wire.requestFrom(CARDKB_ADDR, 1);
         while (Wire.available()) {
             char c = Wire.read();  // receive a byte as character
@@ -989,3 +1004,94 @@ void downLinkDataHandle(McpsIndication_t* mcpsIndication) {
 }
 
 
+
+
+ void drawInfoScreen(){
+    display.clear();
+    display.setFont(ArialMT_Plain_10);
+    display.setTextAlignment(TEXT_ALIGN_LEFT);
+
+    int battery_percentage = 65; //TODO: actual battery percentage
+
+    //battery icon
+    const uint8_t* battery_icon_bits;
+    if(battery_percentage >= 75)
+        battery_icon_bits = battery_icon_100_bits;
+    else if(battery_percentage >= 50)
+        battery_icon_bits = battery_icon_75_bits;
+    else if(battery_percentage >= 25)
+        battery_icon_bits = battery_icon_50_bits;
+    else if(battery_percentage >= 10)
+        battery_icon_bits = battery_icon_25_bits;
+    else
+        battery_icon_bits = battery_icon_0_bits;
+
+    display.drawXbm(44, 2, battery_icon_0_width, battery_icon_0_height, battery_icon_bits);
+
+    //battery percentage
+    //display.setFont(ArialMT_Plain_10);
+    display.drawString(22, 0, (String(battery_percentage) + "%").c_str());
+
+    //signal bars
+    int number_of_bars = 4; //TODO: actual number of bars
+
+    const uint8_t* signal_bars_bits = nullptr;
+    uint16_t signal_bars_width = 0;
+    uint16_t signal_bars_height = 0;
+
+    if(number_of_bars = 4){
+        signal_bars_bits = signal_bars_4_bits;
+        signal_bars_width = signal_bars_4_width;
+        signal_bars_height = signal_bars_4_height;
+    } else if(number_of_bars = 3){
+        signal_bars_bits = signal_bars_3_bits;
+        signal_bars_width = signal_bars_3_width;
+        signal_bars_height = signal_bars_3_height;
+    } else if(number_of_bars = 2){
+        signal_bars_bits = signal_bars_2_bits;
+        signal_bars_width = signal_bars_2_width;
+        signal_bars_height = signal_bars_2_height;
+    } else if(number_of_bars = 1){
+        signal_bars_bits = signal_bars_1_bits;
+        signal_bars_width = signal_bars_1_width;
+        signal_bars_height = signal_bars_1_height;
+    }
+
+    if(signal_bars_bits != nullptr){
+        display.drawXbm(0, 2, signal_bars_width, signal_bars_height, signal_bars_bits);
+    }
+
+    //calendar icon
+    display.drawXbm(3, 18, calendar_icon_width, calendar_icon_height, calendar_icon_bits);
+
+    //date
+    display.drawString(21, 17, "12/01/23");
+
+    //clock icon
+    display.drawXbm(3, 34, clock_icon_width, clock_icon_height, clock_icon_bits);
+
+    //time string
+    unsigned long currentTime = millis();
+    int hours = (currentTime / (1000*60*60)) % 24;
+    int minutes = (currentTime / (1000*60)) % 60;
+    int seconds = (currentTime / 1000) % 60;
+    String hours_string = hours < 10 ? "0" + String(hours) : String(hours);
+    String minutes_string = minutes < 10 ? "0" + String(minutes) : String(minutes);
+    String seconds_string = seconds < 10 ? "0" + String(seconds) : String(seconds);
+
+    String time_string = hours_string + ":" + minutes_string + ":" + seconds_string;
+    display.drawString(21, 33, time_string.c_str());
+
+    //info text
+    display.setTextAlignment(TEXT_ALIGN_CENTER);
+    display.drawStringMaxWidth(34, 52, 64, currentInfoText.c_str());
+    
+    //big font
+    display.setFont(ArialMT_Plain_16);
+
+    //HaLoRa Text
+    display.drawString(31, 112, "HaLoRa");
+
+    // write the buffer to the display
+    display.display();
+}
